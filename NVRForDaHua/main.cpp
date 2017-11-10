@@ -126,6 +126,7 @@ int main(void)
 	}
 	else
 	{
+
 		printf("login success!\r\n");
 		//1.实时取流 已完成。
 		//TODO速度待优化，目前有卡顿。
