@@ -62,13 +62,13 @@ IplImage* YUV420_To_IplImage_Opencv(char* pYUV420, int width, int height)
 	cvReleaseImage(&desc);
 	return rgbimg;
 }
-//设备短线回调函数
+//设备断线回调函数
 void CALLBACK DisConnectFunc(LONG lLoginID, char *pchDVRIP, LONG nDVRPort, DWORD dwUser)
 {
 	printf("设备断线.\n");
 	return;
 }
-//短线重练回调函数
+//自动重连回调函数
 void CALLBACK AutoReConnectFunc(LONG lLoginID, char *pchDVRIP, LONG nDVRPort, DWORD dwUser)
 {
 	printf("自动重连成功.\n");
@@ -88,7 +88,7 @@ void CALLBACK DecCBFun(LONG nPort, char * pBuf, LONG nSize, FRAME_INFO * pFrameI
 	// pbuf里的数据是YUV I420格式的数据   
 	if (pFrameInfo->nType == 3) //视频数据   
 	{
-		//将回调获取的YUV420数据放入list列表中
+		//将回调获取的YUV420数据放入list数据结构中
 		//这种方式可以保证所有数据不会丢失
 		//若做实时显示,可以进行丢帧处理来降低卡顿。
 		TVideoData data;
@@ -153,9 +153,7 @@ int main(void)
 	}
 	else
 	{
-
 		printf("login success!\r\n");
-		
 #if SWITCH //SWITCH 宏定义，可通过修改该开关切换实时数据显示和文件回调显示
 		//1.实时取流。
 		lRealPlay = CLIENT_RealPlayEx(lLogin, 2, NULL, DH_RType_Realplay);
@@ -165,7 +163,6 @@ int main(void)
 			CLIENT_SetRealDataCallBackEx(lRealPlay, RealDataCallBackEx, 0, 0x0000001f);
 		}
 		HANDLE hThread1 = CreateThread(NULL, 0, DataDeal, NULL, 0, NULL);
-		
 #endif
 #if !SWITCH
 		//2.文件取流 回放
@@ -203,8 +200,3 @@ int main(void)
 	PLAY_CloseStream(PLAYPORT);
 	return 0;
 }
-
-
-
-
-
