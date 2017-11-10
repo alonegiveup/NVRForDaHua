@@ -102,6 +102,16 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>../include</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>../lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>dhconfigsdk.lib;dhnetsdk.lib;dhplay.lib;opencv_core2410.lib;opencv_highgui2410.lib;opencv_imgproc2410.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
   </ItemGroup>
