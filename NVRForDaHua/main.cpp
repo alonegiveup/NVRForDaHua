@@ -1,66 +1,49 @@
-#include <stdio.h>
-#include <iostream>
 #include <Windows.h>
 #include "dhnetsdk.h"
 #include "dhplay.h"
-#include <cstring>
-#include <winCon.h>
 #include "opencv2/opencv.hpp"
 using namespace std;
 #define SWITCH 1
 #define PLAYPORT 1
+extern "C"
+{
+#include "libavutil/opt.h"
+#include "libavcodec/avcodec.h"
+#include "libavutil/channel_layout.h"
+#include "libavutil/common.h"
+#include "libavutil/imgutils.h"
+#include "libavutil/mathematics.h"
+#include "libavutil/samplefmt.h"
+#include "libswscale/swscale.h" 
+}
 typedef struct VideoData
 {
 	char* data;
 	int width;
 	int height;
 }TVideoData; //视频数据结构体
-list<VideoData> videolist;//list存储视频数据
-
-//解码函数 将YUV420解码为IplImage
-IplImage* YUV420_To_IplImage_Opencv(char* pYUV420, int width, int height)
+bool YUV420ToBGR24_FFmpeg(unsigned char* pYUV, unsigned char* pBGR24, int width, int height)
 {
-	if (!pYUV420)
-	{
-		return NULL;
+	if (width < 1 || height < 1 || pYUV == NULL || pBGR24 == NULL)
+		return false;
+	AVPicture pFrameYUV, pFrameBGR;
+	avpicture_fill(&pFrameYUV, pYUV, AV_PIX_FMT_YUV420P, width, height);
+	avpicture_fill(&pFrameBGR, pBGR24, AV_PIX_FMT_BGR24, width, height);
+	struct SwsContext* imgCtx = NULL;
+	imgCtx = sws_getContext(width, height, AV_PIX_FMT_YUV420P, width, height, AV_PIX_FMT_BGR24, SWS_BILINEAR, 0, 0, 0);
+	if (imgCtx != NULL){
+		sws_scale(imgCtx, pFrameYUV.data, pFrameYUV.linesize, 0, height, pFrameBGR.data, pFrameBGR.linesize);
+		if (imgCtx){
+			sws_freeContext(imgCtx);
+			imgCtx = NULL;
+		}
+		return true;
 	}
-	IplImage *yuvimage, *rgbimg, *yimg, *uimg, *vimg, *uuimg, *vvimg;
-	int nWidth = width;
-	int nHeight = height;
-	rgbimg = cvCreateImage(cvSize(nWidth, nHeight), IPL_DEPTH_8U, 3);
-	yuvimage = cvCreateImage(cvSize(nWidth, nHeight), IPL_DEPTH_8U, 3);
-	yimg = cvCreateImageHeader(cvSize(nWidth, nHeight), IPL_DEPTH_8U, 1);
-	uimg = cvCreateImageHeader(cvSize(nWidth / 2, nHeight / 2), IPL_DEPTH_8U, 1);
-	vimg = cvCreateImageHeader(cvSize(nWidth / 2, nHeight / 2), IPL_DEPTH_8U, 1);
-	uuimg = cvCreateImage(cvSize(nWidth, nHeight), IPL_DEPTH_8U, 1);
-	vvimg = cvCreateImage(cvSize(nWidth, nHeight), IPL_DEPTH_8U, 1);
-	cvSetData(yimg, pYUV420, nWidth);
-	cvSetData(uimg, pYUV420 + nWidth*nHeight, nWidth / 2);
-	cvSetData(vimg, pYUV420 + long(nWidth*nHeight*1.25), nWidth / 2);
-	cvResize(uimg, uuimg, CV_INTER_LINEAR);
-	cvResize(vimg, vvimg, CV_INTER_LINEAR);
-	cvMerge(yimg, uuimg, vvimg, NULL, yuvimage);
-	cvCvtColor(yuvimage, rgbimg, CV_YCrCb2RGB);
-	cvReleaseImage(&uuimg);
-	cvReleaseImage(&vvimg);
-	cvReleaseImageHeader(&yimg);
-	cvReleaseImageHeader(&uimg);
-	cvReleaseImageHeader(&vimg);
-	cvReleaseImage(&yuvimage);
-	if (!rgbimg)
-	{
-		return NULL;
+	else{
+		sws_freeContext(imgCtx);
+		imgCtx = NULL;
+		return false;
 	}
-	CvSize sz;
-	IplImage *desc;
-	sz.width = rgbimg->width*0.5;
-	sz.height = rgbimg->height*0.5;
-	desc = cvCreateImage(sz, rgbimg->depth, rgbimg->nChannels);
-	cvResize(rgbimg, desc, CV_INTER_CUBIC);
-	cvShowImage("test", desc);
-	cvWaitKey(1);
-	cvReleaseImage(&desc);
-	return rgbimg;
 }
 //设备断线回调函数
 void CALLBACK DisConnectFunc(LONG lLoginID, char *pchDVRIP, LONG nDVRPort, DWORD dwUser)
@@ -89,16 +72,18 @@ void CALLBACK DecCBFun(LONG nPort, char * pBuf, LONG nSize, FRAME_INFO * pFrameI
 	if (pFrameInfo->nType == 3) //视频数据   
 	{
 		//将回调获取的YUV420数据放入list数据结构中
-		//这种方式可以保证所有数据不会丢失
-		//若做实时显示,可以进行丢帧处理来降低卡顿。
-		TVideoData data;
-		data.data = (char*)malloc(sizeof(char)*nSize);
-		memcpy(data.data,pBuf,nSize);
-		data.height = pFrameInfo->nHeight;
-		data.width = pFrameInfo->nWidth;
-		videolist.push_back(data);
+		double Time = (double)cvGetTickCount();
+		unsigned char* rgb = new unsigned char[sizeof(char)*nSize*10];
+		YUV420ToBGR24_FFmpeg((unsigned char*)pBuf, rgb, pFrameInfo->nWidth, pFrameInfo->nHeight);
+		cv::Mat img(pFrameInfo->nHeight, pFrameInfo->nWidth,CV_8UC3,rgb);
+		resize(img,img,cv::Size(640,480));
+		imshow("test",img);
+		cvWaitKey(1);
+		img.release();
+		delete[] rgb;
+		Time = (double)cvGetTickCount() - Time;
+		printf("run time = %gms\n", Time / (cvGetTickFrequency() * 1000));
 	}
-	return;
 }
 //文件回放下载进度回调函数
 void CALLBACK cbDownLoadPos(LLONG lPlayHandle, DWORD dwTotalSize, DWORD dwDownLoadSize, LDWORD dwUser)
@@ -113,22 +98,6 @@ int CALLBACK fDownLoadDataCallBack(LLONG lRealHandle, DWORD dwDataType, BYTE *pB
 		PLAY_InputData(PLAYPORT, pBuffer, dwBufSize);
 	}
 	return 1;
-}
-//数据处理函数
-DWORD WINAPI DataDeal(LPVOID lpParameter)
-{
-	while (1)
-	{
-		while (videolist.size() == 0);
-		TVideoData data = videolist.front();
-		double Time = (double)cvGetTickCount();
-		YUV420_To_IplImage_Opencv(data.data, data.width, data.height);
-		Time = (double)cvGetTickCount() - Time;
-		printf("run time = %gms\n", Time / (cvGetTickFrequency() * 1000));
-		free(data.data);
-		videolist.pop_front();
-	}
-	return 0;
 }
 int main(void)
 {
@@ -156,13 +125,12 @@ int main(void)
 		printf("login success!\r\n");
 #if SWITCH //SWITCH 宏定义，可通过修改该开关切换实时数据显示和文件回调显示
 		//1.实时取流。
-		lRealPlay = CLIENT_RealPlayEx(lLogin, 2, NULL, DH_RType_Realplay);
+		lRealPlay = CLIENT_RealPlayEx(lLogin, 0, NULL, DH_RType_Realplay);
 		//CLIENT_RealPlayEx 第二个参数为NVR 播放通道 此处为单通道显示可改为多通道预览
 		if (lRealPlay != 0)
 		{
 			CLIENT_SetRealDataCallBackEx(lRealPlay, RealDataCallBackEx, 0, 0x0000001f);
 		}
-		HANDLE hThread1 = CreateThread(NULL, 0, DataDeal, NULL, 0, NULL);
 #endif
 #if !SWITCH
 		//2.文件取流 回放
@@ -187,7 +155,6 @@ int main(void)
 		int result = CLIENT_FindNextFile(lSearch, &info);
 		//查询到符合参数的文件名 存储于info结构体中
 		LONG state = CLIENT_PlayBackByRecordFileEx(lLogin,&info,NULL,cbDownLoadPos,NULL,fDownLoadDataCallBack,NULL);
-		HANDLE hThread1 = CreateThread(NULL, 0, DataDeal, NULL, 0, NULL);
 #endif
 	}
 	getchar();
