@@ -4,7 +4,7 @@
 #include "opencv2/opencv.hpp"
 using namespace std;
 #define SWITCH 1
-#define PLAYPORT 1
+#define PLAYPORT 0
 extern "C"
 {
 #include "libavutil/opt.h"
@@ -73,12 +73,13 @@ void CALLBACK DecCBFun(LONG nPort, char * pBuf, LONG nSize, FRAME_INFO * pFrameI
 	{
 		//将回调获取的YUV420数据放入list数据结构中
 		double Time = (double)cvGetTickCount();
-		unsigned char* rgb = new unsigned char[sizeof(char)*nSize*10];
+		unsigned char* rgb = new unsigned char[sizeof(char)*pFrameInfo->nWidth *pFrameInfo->nHeight * 3];
+		memset(rgb, '\0', sizeof(char)*pFrameInfo->nWidth *pFrameInfo->nHeight * 3);
 		YUV420ToBGR24_FFmpeg((unsigned char*)pBuf, rgb, pFrameInfo->nWidth, pFrameInfo->nHeight);
 		cv::Mat img(pFrameInfo->nHeight, pFrameInfo->nWidth,CV_8UC3,rgb);
-		resize(img,img,cv::Size(640,480));
-		imshow("test",img);
-		cvWaitKey(1);
+		//resize(img,img,cv::Size(640,480));
+		//imshow("test",img);
+		//cvWaitKey(1);
 		img.release();
 		delete[] rgb;
 		Time = (double)cvGetTickCount() - Time;
@@ -123,7 +124,7 @@ int main(void)
 	else
 	{
 		printf("login success!\r\n");
-#if SWITCH //SWITCH 宏定义，可通过修改该开关切换实时数据显示和文件回调显示
+#if 1 //SWITCH 宏定义，可通过修改该开关切换实时数据显示和文件回调显示
 		//1.实时取流。
 		lRealPlay = CLIENT_RealPlayEx(lLogin, 0, NULL, DH_RType_Realplay);
 		//CLIENT_RealPlayEx 第二个参数为NVR 播放通道 此处为单通道显示可改为多通道预览
@@ -132,7 +133,7 @@ int main(void)
 			CLIENT_SetRealDataCallBackEx(lRealPlay, RealDataCallBackEx, 0, 0x0000001f);
 		}
 #endif
-#if !SWITCH
+#if 0
 		//2.文件取流 回放
 		NET_RECORDFILE_INFO info = { 0 };
 		LPNET_TIME time_start = (LPNET_TIME)malloc(sizeof(LPNET_TIME));
@@ -150,11 +151,11 @@ int main(void)
 		time_end->dwMinute = 15;
 		time_end->dwSecond = 0;
 		//设置回放时间段
-		lSearch = CLIENT_FindFile(lLogin, 0, 0, NULL, time_start, time_end, FALSE, 1000);
+		lSearch = CLIENT_FindFile(lLogin, 0, 0, NULL, time_start, time_end, FALSE, 100);
 		//CLIENT_FindFile 第二个参数为通道号，文件回放只允许开启一个通道进行文件回放 第三个参数为文件类型
 		int result = CLIENT_FindNextFile(lSearch, &info);
 		//查询到符合参数的文件名 存储于info结构体中
-		LONG state = CLIENT_PlayBackByRecordFileEx(lLogin,&info,NULL,cbDownLoadPos,NULL,fDownLoadDataCallBack,NULL);
+		LONG state = CLIENT_PlayBackByRecordFileEx(lLogin, &info, NULL, cbDownLoadPos, NULL, fDownLoadDataCallBack, NULL);
 #endif
 	}
 	getchar();
